@@ -1,4 +1,6 @@
+# -----------------------------
 # Miscellaneous
+# -----------------------------
 *.class
 *.log
 *.pyc
@@ -12,34 +14,73 @@
 .swiftpm/
 migrate_working_dir/
 
-# IntelliJ related
+# IDEs
 *.iml
 *.ipr
 *.iws
 .idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
+# VS Code config optional
 #.vscode/
 
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
+# -----------------------------
+# Flutter/Dart
+# -----------------------------
+.dart_tool/                  # Flutter/Dart build and tool caches
 .flutter-plugins-dependencies
-.pub-cache/
+.pub-cache/                  # Pub global cache, huge and user-specific
 .pub/
-/build/
-/coverage/
+**/doc/api/                  # Dart doc output
+**/ios/Flutter/.last_build_id
+/build/                      # All platform build outputs
+/coverage/                   # Test coverage reports
 
-# Symbolication related
+# Obfuscation / symbolication
 app.*.symbols
-
-# Obfuscation related
 app.*.map.json
 
-# Android Studio will place build artifacts here
+# -----------------------------
+# Android build artifacts
+# -----------------------------
+/android/app/build/
+# Older Android Studio paths
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# -----------------------------
+# iOS build artifacts
+# -----------------------------
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Flutter.podspec
+/ios/Flutter/ephemeral/
+/ios/Pods/
+/ios/.symlinks/
+/ios/Runner.xcworkspace/
+/ios/build/
+
+# -----------------------------
+# Windows build artifacts
+# -----------------------------
+/windows/runner/Debug/
+/windows/runner/Release/
+/windows/flutter/ephemeral/
+/windows/x64/*.dll
+/windows/x86/*.dll
+/windows/flutter/generated_plugin_registrant.*
+/windows/flutter/generated_plugins.cmake
+
+# -----------------------------
+# macOS build artifacts
+# -----------------------------
+/macos/Flutter/ephemeral/
+/macos/Pods/
+/macos/Flutter/Flutter.framework
+/macos/Flutter/Flutter.podspec
+/macos/Runner.xcworkspace/
+/macos/build/
+
+# -----------------------------
+# Linux build artifacts
+# -----------------------------
+/linux/flutter/ephemeral/
+/linux/build/

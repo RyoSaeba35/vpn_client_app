@@ -2,17 +2,6 @@
 icon: material/new-box
 ---
 
-!!! quote "Changes in sing-box 1.13.0"
-
-    :material-plus: [network_interface_address](#network_interface_address)  
-    :material-plus: [default_interface_address](#default_interface_address)
-
-!!! quote "Changes in sing-box 1.11.0"
-
-    :material-plus: [network_type](#network_type)  
-    :material-plus: [network_is_expensive](#network_is_expensive)  
-    :material-plus: [network_is_constrained](#network_is_constrained)
-
 ### Structure
 
 !!! question "Since sing-box 1.8.0"
@@ -72,24 +61,8 @@ icon: material/new-box
       "process_path": [
         "/usr/bin/curl"
       ],
-      "process_path_regex": [
-        "^/usr/bin/.+"
-      ],
       "package_name": [
         "com.termux"
-      ],
-      "network_type": [
-        "wifi"
-      ],
-      "network_is_expensive": false,
-      "network_is_constrained": false,
-      "network_interface_address": {
-        "wifi": [
-          "2000::/3"
-        ]
-      },
-      "default_interface_address": [
-        "2000::/3"
       ],
       "wifi_ssid": [
         "My WIFI"
@@ -155,7 +128,7 @@ Match source IP CIDR.
 
 !!! info ""
 
-    `ip_cidr` is an alias for `source_ip_cidr` when `rule_set_ipcidr_match_source` enabled in route/DNS rules.
+    `ip_cidr` is an alias for `source_ip_cidr` when the Rule Set is used in DNS rules or `rule_set_ipcidr_match_source` enabled in route rules.
 
 Match IP CIDR.
 
@@ -191,78 +164,15 @@ Match process name.
 
 Match process path.
 
-#### process_path_regex
-
-!!! question "Since sing-box 1.10.0"
-
-!!! quote ""
-
-    Only supported on Linux, Windows, and macOS.
-
-Match process path using regular expression.
-
 #### package_name
 
 Match android package name.
-
-#### network_type
-
-!!! question "Since sing-box 1.11.0"
-
-!!! quote ""
-
-    Only supported in graphical clients on Android and Apple platforms.
-
-Match network type.
-
-Available values: `wifi`, `cellular`, `ethernet` and `other`.
-
-#### network_is_expensive
-
-!!! question "Since sing-box 1.11.0"
-
-!!! quote ""
-
-    Only supported in graphical clients on Android and Apple platforms.
-
-Match if network is considered Metered (on Android) or considered expensive,
-such as Cellular or a Personal Hotspot (on Apple platforms).
-
-#### network_is_constrained
-
-!!! question "Since sing-box 1.11.0"
-
-!!! quote ""
-
-    Only supported in graphical clients on Apple platforms.
-
-Match if network is in Low Data Mode.
-
-#### network_interface_address
-
-!!! question "Since sing-box 1.13.0"
-
-!!! quote ""
-
-    Only supported in graphical clients on Android and Apple platforms.
-
-Matches network interface (same values as `network_type`) address.
-
-#### default_interface_address
-
-!!! question "Since sing-box 1.13.0"
-
-!!! quote ""
-
-    Only supported on Linux, Windows, and macOS.
-
-Match default interface address.
 
 #### wifi_ssid
 
 !!! quote ""
 
-    Only supported in graphical clients on Android and Apple platforms.
+    Only supported in graphical clients on Android and iOS.
 
 Match WiFi SSID.
 
@@ -270,7 +180,7 @@ Match WiFi SSID.
 
 !!! quote ""
 
-    Only supported in graphical clients on Android and Apple platforms.
+    Only supported in graphical clients on Android and iOS.
 
 Match WiFi BSSID.
 

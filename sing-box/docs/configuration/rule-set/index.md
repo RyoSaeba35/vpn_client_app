@@ -1,52 +1,52 @@
-!!! quote "Changes in sing-box 1.10.0"
+---
+icon: material/new-box
+---
 
-    :material-plus: `type: inline`
-
-# rule-set
+# Rule Set
 
 !!! question "Since sing-box 1.8.0"
 
 ### Structure
 
-=== "Inline"
+```json
+{
+  "type": "",
+  "tag": "",
+  "format": "",
+  
+  ... // Typed Fields
+}
+```
 
-    !!! question "Since sing-box 1.10.0"
+#### Local Structure
 
-    ```json
-    {
-      "type": "inline", // optional
-      "tag": "",
-      "rules": []
-    }
-    ```
+```json
+{
+  "type": "local",
+  
+  ...
+  
+  "path": ""
+}
+```
 
-=== "Local File"
+#### Remote Structure
 
-    ```json
-    {
-      "type": "local",
-      "tag": "",
-      "format": "source", // or binary
-      "path": ""
-    }
-    ```
+!!! info ""
 
-=== "Remote File"
+    Remote rule-set will be cached if `experimental.cache_file.enabled`.
 
-    !!! info ""
-    
-        Remote rule-set will be cached if `experimental.cache_file.enabled`.
-
-    ```json
-    {
-      "type": "remote",
-      "tag": "",
-      "format": "source", // or binary
-      "url": "",
-      "download_detour": "", // optional
-      "update_interval": "" // optional
-    }
-    ```
+```json
+{
+  "type": "remote",
+  
+  ...,
+  
+  "url": "",
+  "download_detour": "",
+  "update_interval": ""
+}
+```
 
 ### Fields
 
@@ -54,33 +54,19 @@
 
 ==Required==
 
-Type of rule-set, `local` or `remote`.
+Type of Rule Set, `local` or `remote`.
 
 #### tag
 
 ==Required==
 
-Tag of rule-set.
-
-### Inline Fields
-
-!!! question "Since sing-box 1.10.0"
-
-#### rules
-
-==Required==
-
-List of [Headless Rule](./headless-rule/).
-
-### Local or Remote Fields
+Tag of Rule Set.
 
 #### format
 
 ==Required==
 
-Format of rule-set file, `source` or `binary`.
-
-Optional when `path` or `url` uses `json` or `srs` as extension.
+Format of Rule Set, `source` or `binary`.
 
 ### Local Fields
 
@@ -88,11 +74,7 @@ Optional when `path` or `url` uses `json` or `srs` as extension.
 
 ==Required==
 
-!!! note ""
-
-    Will be automatically reloaded if file modified since sing-box 1.10.0.
-
-File path of rule-set.
+File path of Rule Set.
 
 ### Remote Fields
 
@@ -100,7 +82,7 @@ File path of rule-set.
 
 ==Required==
 
-Download URL of rule-set.
+Download URL of Rule Set.
 
 #### download_detour
 
@@ -110,6 +92,6 @@ Default outbound will be used if empty.
 
 #### update_interval
 
-Update interval of rule-set.
+Update interval of Rule Set.
 
 `1d` will be used if empty.

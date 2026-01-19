@@ -5,53 +5,51 @@ import (
 	"encoding/binary"
 	"io"
 	"os"
+	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
-	E "github.com/sagernet/sing/common/exceptions"
+	M "github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/common/task"
 
 	mDNS "github.com/miekg/dns"
 )
 
-func StreamDomainNameQuery(readCtx context.Context, metadata *adapter.InboundContext, reader io.Reader) error {
+func StreamDomainNameQuery(readCtx context.Context, reader io.Reader) (*adapter.InboundContext, error) {
 	var length uint16
 	err := binary.Read(reader, binary.BigEndian, &length)
 	if err != nil {
-		return E.Cause1(ErrNeedMoreData, err)
+		return nil, err
 	}
-	if length < 12 {
-		return os.ErrInvalid
+	if length == 0 {
+		return nil, os.ErrInvalid
 	}
 	buffer := buf.NewSize(int(length))
 	defer buffer.Release()
-	var n int
-	n, err = buffer.ReadFullFrom(reader, buffer.FreeLen())
-	packet := buffer.Bytes()
-	if n > 2 && packet[2]&0x80 != 0 { // QR
-		return os.ErrInvalid
-	}
-	if n > 5 && packet[4] == 0 && packet[5] == 0 { // QDCOUNT
-		return os.ErrInvalid
-	}
-	for i := 6; i < 10; i++ {
-		// ANCOUNT, NSCOUNT
-		if n > i && packet[i] != 0 {
-			return os.ErrInvalid
-		}
-	}
+
+	readCtx, cancel := context.WithTimeout(readCtx, time.Millisecond*100)
+	var readTask task.Group
+	readTask.Append0(func(ctx context.Context) error {
+		return common.Error(buffer.ReadFullFrom(reader, buffer.FreeLen()))
+	})
+	err = readTask.Run(readCtx)
+	cancel()
 	if err != nil {
-		return E.Cause1(ErrNeedMoreData, err)
+		return nil, err
 	}
-	return DomainNameQuery(readCtx, metadata, packet)
+	return DomainNameQuery(readCtx, buffer.Bytes())
 }
 
-func DomainNameQuery(ctx context.Context, metadata *adapter.InboundContext, packet []byte) error {
+func DomainNameQuery(ctx context.Context, packet []byte) (*adapter.InboundContext, error) {
 	var msg mDNS.Msg
 	err := msg.Unpack(packet)
-	if err != nil || msg.Response || len(msg.Question) == 0 || len(msg.Answer) > 0 || len(msg.Ns) > 0 {
-		return err
+	if err != nil {
+		return nil, err
 	}
-	metadata.Protocol = C.ProtocolDNS
-	return nil
+	if len(msg.Question) == 0 || msg.Question[0].Qclass != mDNS.ClassINET || !M.IsDomainName(msg.Question[0].Name) {
+		return nil, os.ErrInvalid
+	}
+	return &adapter.InboundContext{Protocol: C.ProtocolDNS}, nil
 }

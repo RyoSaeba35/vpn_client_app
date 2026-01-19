@@ -47,12 +47,15 @@ func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, opt
 		if len(tlsConfig.NextProtos()) == 0 {
 			tlsConfig.SetNextProtos([]string{http2.NextProtoTLS})
 		}
-		tlsDialer := tls.NewDialer(dialer, tlsConfig)
 		transport = &http2.Transport{
 			ReadIdleTimeout: time.Duration(options.IdleTimeout),
 			PingTimeout:     time.Duration(options.PingTimeout),
 			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.STDConfig) (net.Conn, error) {
-				return tlsDialer.DialTLSContext(ctx, M.ParseSocksaddr(addr))
+				conn, err := dialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
+				if err != nil {
+					return nil, err
+				}
+				return tls.ClientHandshake(ctx, conn, tlsConfig)
 			},
 		}
 	}
@@ -143,7 +146,7 @@ func (c *Client) dialHTTP2(ctx context.Context) (net.Conn, error) {
 			conn.Setup(nil, err)
 		} else if response.StatusCode != 200 {
 			response.Body.Close()
-			conn.Setup(nil, E.New("v2ray-http: unexpected status: ", response.Status))
+			conn.Setup(nil, E.New("unexpected status: ", response.Status))
 		} else {
 			conn.Setup(response.Body, nil)
 		}
@@ -152,6 +155,6 @@ func (c *Client) dialHTTP2(ctx context.Context) (net.Conn, error) {
 }
 
 func (c *Client) Close() error {
-	c.transport = ResetTransport(c.transport)
+	CloseIdleConnections(c.transport)
 	return nil
 }

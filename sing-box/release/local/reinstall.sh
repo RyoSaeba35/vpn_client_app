@@ -2,18 +2,17 @@
 
 set -e -o pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
+if [ -d /usr/local/go ]; then
+  export PATH="$PATH:/usr/local/go/bin"
+fi
 
-setup_environment
+DIR=$(dirname "$0")
+PROJECT=$DIR/../..
 
-BUILD_TAGS=$(get_build_tags)
+pushd $PROJECT
+go install -v -trimpath -ldflags "-s -w -buildid=" -tags with_quic,with_wireguard,with_acme ./cmd/sing-box
+popd
 
-build_sing_box "$BUILD_TAGS"
-
-stop_service
-install_binary
-start_service
-
-echo ""
-echo "Reinstallation complete!"
+sudo systemctl stop sing-box
+sudo cp $(go env GOPATH)/bin/sing-box /usr/local/bin/
+sudo systemctl start sing-box

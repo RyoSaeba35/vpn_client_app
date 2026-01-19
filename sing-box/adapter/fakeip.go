@@ -3,11 +3,12 @@ package adapter
 import (
 	"net/netip"
 
+	"github.com/sagernet/sing-dns"
 	"github.com/sagernet/sing/common/logger"
 )
 
 type FakeIPStore interface {
-	SimpleLifecycle
+	Service
 	Contains(address netip.Addr) bool
 	Create(domain string, isIPv6 bool) (netip.Addr, error)
 	Lookup(address netip.Addr) (string, bool)
@@ -26,6 +27,6 @@ type FakeIPStorage interface {
 }
 
 type FakeIPTransport interface {
-	DNSTransport
+	dns.Transport
 	Store() FakeIPStore
 }

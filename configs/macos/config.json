@@ -1,0 +1,26 @@
+{
+  "log": {
+    "level": "debug"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "tun0",
+      "inet4_address": "172.19.0.1/30",
+      "mtu": 1400,
+      "auto_route": true,
+      "strict_route": false,
+      "stack": "system",
+      "sniff": true,
+      "file_descriptor": 180
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+
+  ]
+}

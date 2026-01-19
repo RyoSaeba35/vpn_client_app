@@ -23,6 +23,7 @@ var _ adapter.V2RayClientTransport = (*Client)(nil)
 
 type Client struct {
 	dialer     N.Dialer
+	tlsConfig  tls.Config
 	serverAddr M.Socksaddr
 	requestURL url.URL
 	headers    http.Header
@@ -34,7 +35,6 @@ func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, opt
 		if len(tlsConfig.NextProtos()) == 0 {
 			tlsConfig.SetNextProtos([]string{"http/1.1"})
 		}
-		dialer = tls.NewDialer(dialer, tlsConfig)
 	}
 	var host string
 	if options.Host != "" {
@@ -65,6 +65,7 @@ func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, opt
 	}
 	return &Client{
 		dialer:     dialer,
+		tlsConfig:  tlsConfig,
 		serverAddr: serverAddr,
 		requestURL: requestURL,
 		headers:    headers,
@@ -76,6 +77,12 @@ func (c *Client) DialContext(ctx context.Context) (net.Conn, error) {
 	conn, err := c.dialer.DialContext(ctx, N.NetworkTCP, c.serverAddr)
 	if err != nil {
 		return nil, err
+	}
+	if c.tlsConfig != nil {
+		conn, err = tls.ClientHandshake(ctx, conn, c.tlsConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 	request := &http.Request{
 		Method: http.MethodGet,
@@ -97,7 +104,7 @@ func (c *Client) DialContext(ctx context.Context) (net.Conn, error) {
 	if response.StatusCode != 101 ||
 		!strings.EqualFold(response.Header.Get("Connection"), "upgrade") ||
 		!strings.EqualFold(response.Header.Get("Upgrade"), "websocket") {
-		return nil, E.New("v2ray-http-upgrade: unexpected status: ", response.Status)
+		return nil, E.New("unexpected status: ", response.Status)
 	}
 	if bufReader.Buffered() > 0 {
 		buffer := buf.NewSize(bufReader.Buffered())
@@ -108,8 +115,4 @@ func (c *Client) DialContext(ctx context.Context) (net.Conn, error) {
 		conn = bufio.NewCachedConn(conn, buffer)
 	}
 	return conn, nil
-}
-
-func (c *Client) Close() error {
-	return nil
 }

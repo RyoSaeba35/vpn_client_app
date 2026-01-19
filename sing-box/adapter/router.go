@@ -2,113 +2,115 @@ package adapter
 
 import (
 	"context"
-	"crypto/tls"
-	"net"
 	"net/http"
-	"sync"
-	"time"
+	"net/netip"
 
-	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/common/geoip"
+	"github.com/sagernet/sing-dns"
 	"github.com/sagernet/sing-tun"
-	M "github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/common/control"
 	N "github.com/sagernet/sing/common/network"
-	"github.com/sagernet/sing/common/ntp"
-	"github.com/sagernet/sing/common/x/list"
+	"github.com/sagernet/sing/service"
 
-	"go4.org/netipx"
+	mdns "github.com/miekg/dns"
 )
 
 type Router interface {
-	Lifecycle
+	Service
+	PreStarter
+	PostStarter
+
+	Outbounds() []Outbound
+	Outbound(tag string) (Outbound, bool)
+	DefaultOutbound(network string) (Outbound, error)
+
+	FakeIPStore() FakeIPStore
+
 	ConnectionRouter
-	PreMatch(metadata InboundContext, context tun.DirectRouteContext, timeout time.Duration, supportBypass bool) (tun.DirectRouteDestination, error)
-	ConnectionRouterEx
+
+	GeoIPReader() *geoip.Reader
+	LoadGeosite(code string) (Rule, error)
+
 	RuleSet(tag string) (RuleSet, bool)
+
+	NeedWIFIState() bool
+
+	Exchange(ctx context.Context, message *mdns.Msg) (*mdns.Msg, error)
+	Lookup(ctx context.Context, domain string, strategy dns.DomainStrategy) ([]netip.Addr, error)
+	LookupDefault(ctx context.Context, domain string) ([]netip.Addr, error)
+	ClearDNSCache()
+
+	InterfaceFinder() control.InterfaceFinder
+	UpdateInterfaces() error
+	DefaultInterface() string
+	AutoDetectInterface() bool
+	AutoDetectInterfaceFunc() control.Func
+	DefaultMark() int
+	NetworkMonitor() tun.NetworkUpdateMonitor
+	InterfaceMonitor() tun.DefaultInterfaceMonitor
+	PackageManager() tun.PackageManager
+	WIFIState() WIFIState
 	Rules() []Rule
-	NeedFindProcess() bool
-	AppendTracker(tracker ConnectionTracker)
-	ResetNetwork()
+
+	ClashServer() ClashServer
+	SetClashServer(server ClashServer)
+
+	V2RayServer() V2RayServer
+	SetV2RayServer(server V2RayServer)
+
+	ResetNetwork() error
 }
 
-type ConnectionTracker interface {
-	RoutedConnection(ctx context.Context, conn net.Conn, metadata InboundContext, matchedRule Rule, matchOutbound Outbound) net.Conn
-	RoutedPacketConnection(ctx context.Context, conn N.PacketConn, metadata InboundContext, matchedRule Rule, matchOutbound Outbound) N.PacketConn
+func ContextWithRouter(ctx context.Context, router Router) context.Context {
+	return service.ContextWith(ctx, router)
 }
 
-// Deprecated: Use ConnectionRouterEx instead.
-type ConnectionRouter interface {
-	RouteConnection(ctx context.Context, conn net.Conn, metadata InboundContext) error
-	RoutePacketConnection(ctx context.Context, conn N.PacketConn, metadata InboundContext) error
+func RouterFromContext(ctx context.Context) Router {
+	return service.FromContext[Router](ctx)
 }
 
-type ConnectionRouterEx interface {
-	ConnectionRouter
-	RouteConnectionEx(ctx context.Context, conn net.Conn, metadata InboundContext, onClose N.CloseHandlerFunc)
-	RoutePacketConnectionEx(ctx context.Context, conn N.PacketConn, metadata InboundContext, onClose N.CloseHandlerFunc)
+type HeadlessRule interface {
+	Match(metadata *InboundContext) bool
+}
+
+type Rule interface {
+	HeadlessRule
+	Service
+	Type() string
+	UpdateGeosite() error
+	Outbound() string
+	String() string
+}
+
+type DNSRule interface {
+	Rule
+	DisableCache() bool
+	RewriteTTL() *uint32
 }
 
 type RuleSet interface {
-	Name() string
-	StartContext(ctx context.Context, startContext *HTTPStartContext) error
+	StartContext(ctx context.Context, startContext RuleSetStartContext) error
 	PostStart() error
 	Metadata() RuleSetMetadata
-	ExtractIPSet() []*netipx.IPSet
-	IncRef()
-	DecRef()
-	Cleanup()
-	RegisterCallback(callback RuleSetUpdateCallback) *list.Element[RuleSetUpdateCallback]
-	UnregisterCallback(element *list.Element[RuleSetUpdateCallback])
 	Close() error
 	HeadlessRule
 }
 
-type RuleSetUpdateCallback func(it RuleSet)
-
 type RuleSetMetadata struct {
 	ContainsProcessRule bool
 	ContainsWIFIRule    bool
-	ContainsIPCIDRRule  bool
-}
-type HTTPStartContext struct {
-	ctx             context.Context
-	access          sync.Mutex
-	httpClientCache map[string]*http.Client
 }
 
-func NewHTTPStartContext(ctx context.Context) *HTTPStartContext {
-	return &HTTPStartContext{
-		ctx:             ctx,
-		httpClientCache: make(map[string]*http.Client),
-	}
+type RuleSetStartContext interface {
+	HTTPClient(detour string, dialer N.Dialer) *http.Client
+	Close()
 }
 
-func (c *HTTPStartContext) HTTPClient(detour string, dialer N.Dialer) *http.Client {
-	c.access.Lock()
-	defer c.access.Unlock()
-	if httpClient, loaded := c.httpClientCache[detour]; loaded {
-		return httpClient
-	}
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			ForceAttemptHTTP2:   true,
-			TLSHandshakeTimeout: C.TCPTimeout,
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				return dialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
-			},
-			TLSClientConfig: &tls.Config{
-				Time:    ntp.TimeFuncFromContext(c.ctx),
-				RootCAs: RootPoolFromContext(c.ctx),
-			},
-		},
-	}
-	c.httpClientCache[detour] = httpClient
-	return httpClient
+type InterfaceUpdateListener interface {
+	InterfaceUpdated()
 }
 
-func (c *HTTPStartContext) Close() {
-	c.access.Lock()
-	defer c.access.Unlock()
-	for _, client := range c.httpClientCache {
-		client.CloseIdleConnections()
-	}
+type WIFIState struct {
+	SSID  string
+	BSSID string
 }

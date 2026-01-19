@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/sagernet/quic-go"
-	"github.com/sagernet/quic-go/http3"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/tls"
 	C "github.com/sagernet/sing-box/constant"
@@ -29,7 +28,7 @@ type Client struct {
 	tlsConfig  tls.Config
 	quicConfig *quic.Config
 	connAccess sync.Mutex
-	conn       common.TypedValue[*quic.Conn]
+	conn       quic.Connection
 	rawConn    net.Conn
 }
 
@@ -38,7 +37,7 @@ func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, opt
 		DisablePathMTUDiscovery: !C.IsLinux && !C.IsWindows,
 	}
 	if len(tlsConfig.NextProtos()) == 0 {
-		tlsConfig.SetNextProtos([]string{http3.NextProtoH3})
+		tlsConfig.SetNextProtos([]string{"h2", "http/1.1"})
 	}
 	return &Client{
 		ctx:        ctx,
@@ -49,14 +48,14 @@ func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, opt
 	}, nil
 }
 
-func (c *Client) offer() (*quic.Conn, error) {
-	conn := c.conn.Load()
+func (c *Client) offer() (quic.Connection, error) {
+	conn := c.conn
 	if conn != nil && !common.Done(conn.Context()) {
 		return conn, nil
 	}
 	c.connAccess.Lock()
 	defer c.connAccess.Unlock()
-	conn = c.conn.Load()
+	conn = c.conn
 	if conn != nil && !common.Done(conn.Context()) {
 		return conn, nil
 	}
@@ -67,18 +66,19 @@ func (c *Client) offer() (*quic.Conn, error) {
 	return conn, nil
 }
 
-func (c *Client) offerNew() (*quic.Conn, error) {
+func (c *Client) offerNew() (quic.Connection, error) {
 	udpConn, err := c.dialer.DialContext(c.ctx, "udp", c.serverAddr)
 	if err != nil {
 		return nil, err
 	}
-	packetConn := bufio.NewUnbindPacketConn(udpConn)
+	var packetConn net.PacketConn
+	packetConn = bufio.NewUnbindPacketConn(udpConn)
 	quicConn, err := qtls.Dial(c.ctx, packetConn, udpConn.RemoteAddr(), c.tlsConfig, c.quicConfig)
 	if err != nil {
 		packetConn.Close()
 		return nil, err
 	}
-	c.conn.Store(quicConn)
+	c.conn = quicConn
 	c.rawConn = udpConn
 	return quicConn, nil
 }
@@ -96,15 +96,5 @@ func (c *Client) DialContext(ctx context.Context) (net.Conn, error) {
 }
 
 func (c *Client) Close() error {
-	c.connAccess.Lock()
-	defer c.connAccess.Unlock()
-	conn := c.conn.Swap(nil)
-	if conn != nil {
-		conn.CloseWithError(0, "")
-	}
-	if c.rawConn != nil {
-		c.rawConn.Close()
-	}
-	c.rawConn = nil
-	return nil
+	return common.Close(c.conn, c.rawConn)
 }

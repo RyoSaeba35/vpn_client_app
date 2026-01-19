@@ -2,18 +2,19 @@
 
 set -e -o pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
+if [ -d /usr/local/go ]; then
+  export PATH="$PATH:/usr/local/go/bin"
+fi
 
-setup_environment
+DIR=$(dirname "$0")
+PROJECT=$DIR/../..
 
-BUILD_TAGS=$(get_build_tags)
+pushd $PROJECT
+go install -v -trimpath -ldflags "-s -w -buildid=" -tags with_quic,with_wireguard,with_acme ./cmd/sing-box
+popd
 
-build_sing_box "$BUILD_TAGS"
-install_binary
-setup_config
-setup_systemd
-
-echo ""
-echo "Installation complete!"
-echo "To enable and start the service, run: $SCRIPT_DIR/enable.sh"
+sudo cp $(go env GOPATH)/bin/sing-box /usr/local/bin/
+sudo mkdir -p /usr/local/etc/sing-box
+sudo cp $PROJECT/release/config/config.json /usr/local/etc/sing-box/config.json
+sudo cp $DIR/sing-box.service /etc/systemd/system
+sudo systemctl daemon-reload

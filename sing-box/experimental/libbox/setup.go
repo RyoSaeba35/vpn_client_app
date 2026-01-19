@@ -2,68 +2,48 @@ package libbox
 
 import (
 	"os"
-	"runtime/debug"
-	"time"
+	"os/user"
+	"strconv"
 
+	"github.com/sagernet/sing-box/common/humanize"
 	C "github.com/sagernet/sing-box/constant"
-	"github.com/sagernet/sing-box/experimental/locale"
-	"github.com/sagernet/sing-box/log"
-	"github.com/sagernet/sing/common/byteformats"
 )
 
 var (
-	sBasePath                string
-	sWorkingPath             string
-	sTempPath                string
-	sUserID                  int
-	sGroupID                 int
-	sFixAndroidStack         bool
-	sCommandServerListenPort uint16
-	sCommandServerSecret     string
-	sLogMaxLines             int
-	sDebug                   bool
+	sBasePath    string
+	sWorkingPath string
+	sTempPath    string
+	sUserID      int
+	sGroupID     int
+	sTVOS        bool
 )
 
-func init() {
-	debug.SetPanicOnFault(true)
-	debug.SetTraceback("all")
-}
-
-type SetupOptions struct {
-	BasePath                string
-	WorkingPath             string
-	TempPath                string
-	FixAndroidStack         bool
-	CommandServerListenPort int32
-	CommandServerSecret     string
-	LogMaxLines             int
-	Debug                   bool
-}
-
-func Setup(options *SetupOptions) error {
-	sBasePath = options.BasePath
-	sWorkingPath = options.WorkingPath
-	sTempPath = options.TempPath
-
+func Setup(basePath string, workingPath string, tempPath string, isTVOS bool) {
+	sBasePath = basePath
+	sWorkingPath = workingPath
+	sTempPath = tempPath
 	sUserID = os.Getuid()
 	sGroupID = os.Getgid()
-
-	// TODO: remove after fixed
-	// https://github.com/golang/go/issues/68760
-	sFixAndroidStack = options.FixAndroidStack
-
-	sCommandServerListenPort = uint16(options.CommandServerListenPort)
-	sCommandServerSecret = options.CommandServerSecret
-	sLogMaxLines = options.LogMaxLines
-	sDebug = options.Debug
-
+	sTVOS = isTVOS
 	os.MkdirAll(sWorkingPath, 0o777)
 	os.MkdirAll(sTempPath, 0o777)
-	return nil
 }
 
-func SetLocale(localeId string) {
-	locale.Set(localeId)
+func SetupWithUsername(basePath string, workingPath string, tempPath string, username string) error {
+	sBasePath = basePath
+	sWorkingPath = workingPath
+	sTempPath = tempPath
+	sUser, err := user.Lookup(username)
+	if err != nil {
+		return err
+	}
+	sUserID, _ = strconv.Atoi(sUser.Uid)
+	sGroupID, _ = strconv.Atoi(sUser.Gid)
+	os.MkdirAll(sWorkingPath, 0o777)
+	os.MkdirAll(sTempPath, 0o777)
+	os.Chown(sWorkingPath, sUserID, sGroupID)
+	os.Chown(sTempPath, sUserID, sGroupID)
+	return nil
 }
 
 func Version() string {
@@ -71,15 +51,11 @@ func Version() string {
 }
 
 func FormatBytes(length int64) string {
-	return byteformats.FormatKBytes(uint64(length))
+	return humanize.Bytes(uint64(length))
 }
 
 func FormatMemoryBytes(length int64) string {
-	return byteformats.FormatMemoryKBytes(uint64(length))
-}
-
-func FormatDuration(duration int64) string {
-	return log.FormatDuration(time.Duration(duration) * time.Millisecond)
+	return humanize.MemoryBytes(uint64(length))
 }
 
 func ProxyDisplayType(proxyType string) string {

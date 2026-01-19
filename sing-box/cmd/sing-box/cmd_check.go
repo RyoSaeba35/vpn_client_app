@@ -30,7 +30,7 @@ func check() error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(globalCtx)
+	ctx, cancel := context.WithCancel(context.Background())
 	instance, err := box.New(box.Options{
 		Context: ctx,
 		Options: options,

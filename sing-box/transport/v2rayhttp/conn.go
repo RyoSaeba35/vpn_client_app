@@ -2,7 +2,6 @@ package v2rayhttp
 
 import (
 	std_bufio "bufio"
-	"context"
 	"io"
 	"net"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/baderror"
 	"github.com/sagernet/sing/common/buf"
@@ -31,9 +29,6 @@ type HTTPConn struct {
 }
 
 func NewHTTP1Conn(conn net.Conn, request *http.Request) *HTTPConn {
-	if request.Header.Get("Host") == "" {
-		request.Header.Set("Host", request.Host)
-	}
 	return &HTTPConn{
 		Conn:    conn,
 		request: request,
@@ -48,7 +43,7 @@ func (c *HTTPConn) Read(b []byte) (n int, err error) {
 			return 0, E.Cause(err, "read response")
 		}
 		if response.StatusCode != 200 {
-			return 0, E.New("v2ray-http: unexpected status: ", response.Status)
+			return 0, E.New("unexpected status: ", response.Status)
 		}
 		if cacheLen := reader.Buffered(); cacheLen > 0 {
 			c.responseCache = buf.NewSize(cacheLen)
@@ -91,6 +86,9 @@ func (c *HTTPConn) writeRequest(payload []byte) error {
 	_, err := writer.Write([]byte(F.ToString(c.request.Method, " ", c.request.URL.RequestURI(), " HTTP/1.1", CRLF)))
 	if err != nil {
 		return err
+	}
+	if c.request.Header.Get("Host") == "" {
+		c.request.Header.Set("Host", c.request.Host)
 	}
 	for key, value := range c.request.Header {
 		_, err = writer.Write([]byte(F.ToString(key, ": ", strings.Join(value, ", "), CRLF)))
@@ -256,12 +254,4 @@ func (w *HTTP2ConnWrapper) Close() error {
 
 func (w *HTTP2ConnWrapper) Upstream() any {
 	return w.ExtendedConn
-}
-
-func DupContext(ctx context.Context) context.Context {
-	id, loaded := log.IDFromContext(ctx)
-	if !loaded {
-		return context.Background()
-	}
-	return log.ContextWithID(context.Background(), id)
 }

@@ -1,5 +1,15 @@
-//go:build with_reality_server
+//go:build !with_reality_server
 
 package tls
 
-var _ int = "The separate `with_reality_server` build tag has been merged into `with_utls` and is no longer needed, please update your build configuration."
+import (
+	"context"
+
+	"github.com/sagernet/sing-box/log"
+	"github.com/sagernet/sing-box/option"
+	E "github.com/sagernet/sing/common/exceptions"
+)
+
+func NewRealityServer(ctx context.Context, logger log.Logger, options option.InboundTLSOptions) (ServerConfig, error) {
+	return nil, E.New(`reality server is not included in this build, rebuild with -tags with_reality_server`)
+}

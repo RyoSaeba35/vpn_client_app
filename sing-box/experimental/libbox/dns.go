@@ -6,13 +6,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sagernet/sing-box/adapter"
-	C "github.com/sagernet/sing-box/constant"
-	"github.com/sagernet/sing-box/dns"
-	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-dns"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/task"
 
 	mDNS "github.com/miekg/dns"
@@ -24,88 +23,104 @@ type LocalDNSTransport interface {
 	Exchange(ctx *ExchangeContext, message []byte) error
 }
 
-var _ adapter.DNSTransport = (*platformTransport)(nil)
+func RegisterLocalDNSTransport(transport LocalDNSTransport) {
+	if transport == nil {
+		dns.RegisterTransport([]string{"local"}, dns.CreateLocalTransport)
+	} else {
+		dns.RegisterTransport([]string{"local"}, func(name string, ctx context.Context, logger logger.ContextLogger, dialer N.Dialer, link string) (dns.Transport, error) {
+			return &platformLocalDNSTransport{
+				iif: transport,
+			}, nil
+		})
+	}
+}
 
-type platformTransport struct {
-	dns.TransportAdapter
+var _ dns.Transport = (*platformLocalDNSTransport)(nil)
+
+type platformLocalDNSTransport struct {
 	iif LocalDNSTransport
 }
 
-func newPlatformTransport(iif LocalDNSTransport, tag string, options option.LocalDNSServerOptions) *platformTransport {
-	return &platformTransport{
-		TransportAdapter: dns.NewTransportAdapterWithLocalOptions(C.DNSTypeLocal, tag, options),
-		iif:              iif,
+func (p *platformLocalDNSTransport) Name() string {
+	return "local"
+}
+
+func (p *platformLocalDNSTransport) Start() error {
+	return nil
+}
+
+func (p *platformLocalDNSTransport) Reset() {
+}
+
+func (p *platformLocalDNSTransport) Close() error {
+	return nil
+}
+
+func (p *platformLocalDNSTransport) Raw() bool {
+	return p.iif.Raw()
+}
+
+func (p *platformLocalDNSTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, error) {
+	messageBytes, err := message.Pack()
+	if err != nil {
+		return nil, err
 	}
-}
-
-func (p *platformTransport) Start(stage adapter.StartStage) error {
-	return nil
-}
-
-func (p *platformTransport) Close() error {
-	return nil
-}
-
-func (p *platformTransport) Reset() {
-}
-
-func (p *platformTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, error) {
 	response := &ExchangeContext{
 		context: ctx,
 	}
-	if p.iif.Raw() {
-		messageBytes, err := message.Pack()
+	var responseMessage *mDNS.Msg
+	return responseMessage, task.Run(ctx, func() error {
+		err = p.iif.Exchange(response, messageBytes)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		var responseMessage *mDNS.Msg
-		var group task.Group
-		group.Append0(func(ctx context.Context) error {
-			err = p.iif.Exchange(response, messageBytes)
-			if err != nil {
-				return err
-			}
-			if response.error != nil {
-				return response.error
-			}
-			responseMessage = &response.message
-			return nil
-		})
-		err = group.Run(ctx)
-		if err != nil {
-			return nil, err
+		if response.error != nil {
+			return response.error
 		}
-		return responseMessage, nil
-	} else {
-		question := message.Question[0]
-		var network string
-		switch question.Qtype {
-		case mDNS.TypeA:
-			network = "ip4"
-		case mDNS.TypeAAAA:
-			network = "ip6"
-		default:
-			return nil, E.New("only IP queries are supported by current version of Android")
-		}
-		var responseAddrs []netip.Addr
-		var group task.Group
-		group.Append0(func(ctx context.Context) error {
-			err := p.iif.Lookup(response, network, question.Name)
-			if err != nil {
-				return err
-			}
-			if response.error != nil {
-				return response.error
-			}
-			responseAddrs = response.addresses
-			return nil
-		})
-		err := group.Run(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return dns.FixedResponse(message.Id, question, responseAddrs, C.DefaultDNSTTL), nil
+		responseMessage = &response.message
+		return nil
+	})
+}
+
+func (p *platformLocalDNSTransport) Lookup(ctx context.Context, domain string, strategy dns.DomainStrategy) ([]netip.Addr, error) {
+	var network string
+	switch strategy {
+	case dns.DomainStrategyUseIPv4:
+		network = "ip4"
+	case dns.DomainStrategyPreferIPv6:
+		network = "ip6"
+	default:
+		network = "ip"
 	}
+	response := &ExchangeContext{
+		context: ctx,
+	}
+	var responseAddr []netip.Addr
+	return responseAddr, task.Run(ctx, func() error {
+		err := p.iif.Lookup(response, network, domain)
+		if err != nil {
+			return err
+		}
+		if response.error != nil {
+			return response.error
+		}
+		switch strategy {
+		case dns.DomainStrategyUseIPv4:
+			responseAddr = common.Filter(response.addresses, func(it netip.Addr) bool {
+				return it.Is4()
+			})
+		case dns.DomainStrategyPreferIPv6:
+			responseAddr = common.Filter(response.addresses, func(it netip.Addr) bool {
+				return it.Is6()
+			})
+		default:
+			responseAddr = response.addresses
+		}
+		/*if len(responseAddr) == 0 {
+			response.error = dns.RCodeSuccess
+		}*/
+		return nil
+	})
 }
 
 type Func interface {
@@ -142,7 +157,7 @@ func (c *ExchangeContext) RawSuccess(result []byte) {
 }
 
 func (c *ExchangeContext) ErrorCode(code int32) {
-	c.error = dns.RcodeError(code)
+	c.error = dns.RCodeError(code)
 }
 
 func (c *ExchangeContext) ErrnoCode(code int32) {

@@ -8,78 +8,59 @@ import (
 	"crypto/x509"
 	"math/rand"
 	"net"
+	"net/netip"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/common/tlsfragment"
-	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/ntp"
+	utls "github.com/sagernet/utls"
 
-	utls "github.com/metacubex/utls"
 	"golang.org/x/net/http2"
 )
 
 type UTLSClientConfig struct {
-	ctx                   context.Context
-	config                *utls.Config
-	id                    utls.ClientHelloID
-	fragment              bool
-	fragmentFallbackDelay time.Duration
-	recordFragment        bool
+	config *utls.Config
+	id     utls.ClientHelloID
 }
 
-func (c *UTLSClientConfig) ServerName() string {
-	return c.config.ServerName
+func (e *UTLSClientConfig) ServerName() string {
+	return e.config.ServerName
 }
 
-func (c *UTLSClientConfig) SetServerName(serverName string) {
-	c.config.ServerName = serverName
+func (e *UTLSClientConfig) SetServerName(serverName string) {
+	e.config.ServerName = serverName
 }
 
-func (c *UTLSClientConfig) NextProtos() []string {
-	return c.config.NextProtos
+func (e *UTLSClientConfig) NextProtos() []string {
+	return e.config.NextProtos
 }
 
-func (c *UTLSClientConfig) SetNextProtos(nextProto []string) {
+func (e *UTLSClientConfig) SetNextProtos(nextProto []string) {
 	if len(nextProto) == 1 && nextProto[0] == http2.NextProtoTLS {
 		nextProto = append(nextProto, "http/1.1")
 	}
-	c.config.NextProtos = nextProto
+	e.config.NextProtos = nextProto
 }
 
-func (c *UTLSClientConfig) STDConfig() (*STDConfig, error) {
+func (e *UTLSClientConfig) Config() (*STDConfig, error) {
 	return nil, E.New("unsupported usage for uTLS")
 }
 
-func (c *UTLSClientConfig) Client(conn net.Conn) (Conn, error) {
-	if c.recordFragment {
-		conn = tf.NewConn(conn, c.ctx, c.fragment, c.recordFragment, c.fragmentFallbackDelay)
-	}
-	return &utlsALPNWrapper{utlsConnWrapper{utls.UClient(conn, c.config.Clone(), c.id)}, c.config.NextProtos}, nil
+func (e *UTLSClientConfig) Client(conn net.Conn) (Conn, error) {
+	return &utlsALPNWrapper{utlsConnWrapper{utls.UClient(conn, e.config.Clone(), e.id)}, e.config.NextProtos}, nil
 }
 
-func (c *UTLSClientConfig) SetSessionIDGenerator(generator func(clientHello []byte, sessionID []byte) error) {
-	c.config.SessionIDGenerator = generator
+func (e *UTLSClientConfig) SetSessionIDGenerator(generator func(clientHello []byte, sessionID []byte) error) {
+	e.config.SessionIDGenerator = generator
 }
 
-func (c *UTLSClientConfig) Clone() Config {
+func (e *UTLSClientConfig) Clone() Config {
 	return &UTLSClientConfig{
-		c.ctx, c.config.Clone(), c.id, c.fragment, c.fragmentFallbackDelay, c.recordFragment,
+		config: e.config.Clone(),
+		id:     e.id,
 	}
-}
-
-func (c *UTLSClientConfig) ECHConfigList() []byte {
-	return c.config.EncryptedClientHelloConfigList
-}
-
-func (c *UTLSClientConfig) SetECHConfigList(EncryptedClientHelloConfigList []byte) {
-	c.config.EncryptedClientHelloConfigList = EncryptedClientHelloConfigList
 }
 
 type utlsConnWrapper struct {
@@ -88,7 +69,6 @@ type utlsConnWrapper struct {
 
 func (c *utlsConnWrapper) ConnectionState() tls.ConnectionState {
 	state := c.Conn.ConnectionState()
-	//nolint:staticcheck
 	return tls.ConnectionState{
 		Version:                     state.Version,
 		HandshakeComplete:           state.HandshakeComplete,
@@ -107,14 +87,6 @@ func (c *utlsConnWrapper) ConnectionState() tls.ConnectionState {
 
 func (c *utlsConnWrapper) Upstream() any {
 	return c.UConn
-}
-
-func (c *utlsConnWrapper) ReaderReplaceable() bool {
-	return true
-}
-
-func (c *utlsConnWrapper) WriterReplaceable() bool {
-	return true
 }
 
 type utlsALPNWrapper struct {
@@ -142,12 +114,14 @@ func (c *utlsALPNWrapper) HandshakeContext(ctx context.Context) error {
 	return c.UConn.HandshakeContext(ctx)
 }
 
-func NewUTLSClient(ctx context.Context, logger logger.ContextLogger, serverAddress string, options option.OutboundTLSOptions) (Config, error) {
+func NewUTLSClient(ctx context.Context, serverAddress string, options option.OutboundTLSOptions) (*UTLSClientConfig, error) {
 	var serverName string
 	if options.ServerName != "" {
 		serverName = options.ServerName
 	} else if serverAddress != "" {
-		serverName = serverAddress
+		if _, err := netip.ParseAddr(serverName); err != nil {
+			serverName = serverAddress
+		}
 	}
 	if serverName == "" && !options.Insecure {
 		return nil, E.New("missing server_name or insecure=true")
@@ -155,26 +129,15 @@ func NewUTLSClient(ctx context.Context, logger logger.ContextLogger, serverAddre
 
 	var tlsConfig utls.Config
 	tlsConfig.Time = ntp.TimeFuncFromContext(ctx)
-	tlsConfig.RootCAs = adapter.RootPoolFromContext(ctx)
-	if !options.DisableSNI {
+	if options.DisableSNI {
+		tlsConfig.ServerName = "127.0.0.1"
+	} else {
 		tlsConfig.ServerName = serverName
 	}
 	if options.Insecure {
 		tlsConfig.InsecureSkipVerify = options.Insecure
 	} else if options.DisableSNI {
-		if options.Reality != nil && options.Reality.Enabled {
-			return nil, E.New("disable_sni is unsupported in reality")
-		}
-		tlsConfig.InsecureServerNameToVerify = serverName
-	}
-	if len(options.CertificatePublicKeySHA256) > 0 {
-		if len(options.Certificate) > 0 || options.CertificatePath != "" {
-			return nil, E.New("certificate_public_key_sha256 is conflict with certificate or certificate_path")
-		}
-		tlsConfig.InsecureSkipVerify = true
-		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			return verifyPublicKeySHA256(options.CertificatePublicKeySHA256, rawCerts, tlsConfig.Time)
-		}
+		return nil, E.New("disable_sni is unsupported in uTLS")
 	}
 	if len(options.ALPN) > 0 {
 		tlsConfig.NextProtos = options.ALPN
@@ -222,61 +185,11 @@ func NewUTLSClient(ctx context.Context, logger logger.ContextLogger, serverAddre
 		}
 		tlsConfig.RootCAs = certPool
 	}
-	var clientCertificate []byte
-	if len(options.ClientCertificate) > 0 {
-		clientCertificate = []byte(strings.Join(options.ClientCertificate, "\n"))
-	} else if options.ClientCertificatePath != "" {
-		content, err := os.ReadFile(options.ClientCertificatePath)
-		if err != nil {
-			return nil, E.Cause(err, "read client certificate")
-		}
-		clientCertificate = content
-	}
-	var clientKey []byte
-	if len(options.ClientKey) > 0 {
-		clientKey = []byte(strings.Join(options.ClientKey, "\n"))
-	} else if options.ClientKeyPath != "" {
-		content, err := os.ReadFile(options.ClientKeyPath)
-		if err != nil {
-			return nil, E.Cause(err, "read client key")
-		}
-		clientKey = content
-	}
-	if len(clientCertificate) > 0 && len(clientKey) > 0 {
-		keyPair, err := utls.X509KeyPair(clientCertificate, clientKey)
-		if err != nil {
-			return nil, E.Cause(err, "parse client x509 key pair")
-		}
-		tlsConfig.Certificates = []utls.Certificate{keyPair}
-	} else if len(clientCertificate) > 0 || len(clientKey) > 0 {
-		return nil, E.New("client certificate and client key must be provided together")
-	}
 	id, err := uTLSClientHelloID(options.UTLS.Fingerprint)
 	if err != nil {
 		return nil, err
 	}
-	var config Config = &UTLSClientConfig{ctx, &tlsConfig, id, options.Fragment, time.Duration(options.FragmentFallbackDelay), options.RecordFragment}
-	if options.ECH != nil && options.ECH.Enabled {
-		if options.Reality != nil && options.Reality.Enabled {
-			return nil, E.New("Reality is conflict with ECH")
-		}
-		config, err = parseECHClientConfig(ctx, config.(ECHCapableConfig), options)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if (options.KernelRx || options.KernelTx) && !common.PtrValueOrDefault(options.Reality).Enabled {
-		if !C.IsLinux {
-			return nil, E.New("kTLS is only supported on Linux")
-		}
-		config = &KTLSClientConfig{
-			Config:   config,
-			logger:   logger,
-			kernelTx: options.KernelTx,
-			kernelRx: options.KernelRx,
-		}
-	}
-	return config, nil
+	return &UTLSClientConfig{&tlsConfig, id}, nil
 }
 
 var (
@@ -304,10 +217,18 @@ func init() {
 
 func uTLSClientHelloID(name string) (utls.ClientHelloID, error) {
 	switch name {
-	case "chrome_psk", "chrome_psk_shuffle", "chrome_padding_psk_shuffle", "chrome_pq", "chrome_pq_psk":
-		fallthrough
 	case "chrome", "":
 		return utls.HelloChrome_Auto, nil
+	case "chrome_psk":
+		return utls.HelloChrome_100_PSK, nil
+	case "chrome_psk_shuffle":
+		return utls.HelloChrome_112_PSK_Shuf, nil
+	case "chrome_padding_psk_shuffle":
+		return utls.HelloChrome_114_Padding_PSK_Shuf, nil
+	case "chrome_pq":
+		return utls.HelloChrome_115_PQ, nil
+	case "chrome_pq_psk":
+		return utls.HelloChrome_115_PQ_PSK, nil
 	case "firefox":
 		return utls.HelloFirefox_Auto, nil
 	case "edge":

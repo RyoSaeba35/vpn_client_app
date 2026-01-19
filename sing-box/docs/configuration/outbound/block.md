@@ -1,6 +1,4 @@
----
-icon: material/delete-clock
----
+`block` outbound closes all incoming requests.
 
 ### Structure
 
@@ -11,6 +9,6 @@ icon: material/delete-clock
 }
 ```
 
-### Fields
+### 字段
 
 No fields.

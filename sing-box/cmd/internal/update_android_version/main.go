@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,26 +12,9 @@ import (
 	"github.com/sagernet/sing/common"
 )
 
-var (
-	flagRunInCI    bool
-	flagRunNightly bool
-)
-
-func init() {
-	flag.BoolVar(&flagRunInCI, "ci", false, "Run in CI")
-	flag.BoolVar(&flagRunNightly, "nightly", false, "Run nightly")
-}
-
 func main() {
-	flag.Parse()
-	newVersion := common.Must1(build_shared.ReadTag())
-	var androidPath string
-	if flagRunInCI {
-		androidPath = "clients/android"
-	} else {
-		androidPath = "../sing-box-for-android"
-	}
-	androidPath, err := filepath.Abs(androidPath)
+	newVersion := common.Must1(build_shared.ReadTagVersion())
+	androidPath, err := filepath.Abs("../sing-box-for-android")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,24 +31,22 @@ func main() {
 	for _, propPair := range propsList {
 		switch propPair[0] {
 		case "VERSION_NAME":
-			if propPair[1] != newVersion {
-				log.Info("updated version from ", propPair[1], " to ", newVersion)
+			if propPair[1] != newVersion.String() {
 				versionUpdated = true
-				propPair[1] = newVersion
+				propPair[1] = newVersion.String()
+				log.Info("updated version to ", newVersion.String())
 			}
 		case "GO_VERSION":
 			if propPair[1] != runtime.Version() {
-				log.Info("updated Go version from ", propPair[1], " to ", runtime.Version())
 				goVersionUpdated = true
 				propPair[1] = runtime.Version()
+				log.Info("updated Go version to ", runtime.Version())
 			}
 		}
 	}
 	if !(versionUpdated || goVersionUpdated) {
 		log.Info("version not changed")
 		return
-	} else if flagRunInCI && !flagRunNightly {
-		log.Fatal("version changed, commit changes first.")
 	}
 	for _, propPair := range propsList {
 		switch propPair[0] {

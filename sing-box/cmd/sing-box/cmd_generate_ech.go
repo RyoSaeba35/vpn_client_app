@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var pqSignatureSchemesEnabled bool
+
 var commandGenerateECHKeyPair = &cobra.Command{
 	Use:   "ech-keypair <plain_server_name>",
 	Short: "Generate TLS ECH key pair",
@@ -22,11 +24,12 @@ var commandGenerateECHKeyPair = &cobra.Command{
 }
 
 func init() {
+	commandGenerateECHKeyPair.Flags().BoolVar(&pqSignatureSchemesEnabled, "pq-signature-schemes-enabled", false, "Enable PQ signature schemes")
 	commandGenerate.AddCommand(commandGenerateECHKeyPair)
 }
 
 func generateECHKeyPair(serverName string) error {
-	configPem, keyPem, err := tls.ECHKeygenDefault(serverName)
+	configPem, keyPem, err := tls.ECHKeygenDefault(serverName, pqSignatureSchemesEnabled)
 	if err != nil {
 		return err
 	}

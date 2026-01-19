@@ -1,9 +1,9 @@
 package dialer
 
 import (
-	"github.com/sagernet/sing/common/control"
+	"net"
 )
 
 type WireGuardListener interface {
-	WireGuardControl() control.Func
+	ListenPacketCompat(network, address string) (net.PacketConn, error)
 }

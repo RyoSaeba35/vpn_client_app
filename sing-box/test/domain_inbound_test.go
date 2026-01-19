@@ -6,8 +6,7 @@ import (
 
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/json/badoption"
+	dns "github.com/sagernet/sing-dns"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -19,21 +18,21 @@ func TestTUICDomainUDP(t *testing.T) {
 			{
 				Type: C.TypeMixed,
 				Tag:  "mixed-in",
-				Options: &option.HTTPMixedInboundOptions{
+				MixedOptions: option.HTTPMixedInboundOptions{
 					ListenOptions: option.ListenOptions{
-						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						Listen:     option.NewListenAddress(netip.IPv4Unspecified()),
 						ListenPort: clientPort,
 					},
 				},
 			},
 			{
 				Type: C.TypeTUIC,
-				Options: &option.TUICInboundOptions{
+				TUICOptions: option.TUICInboundOptions{
 					ListenOptions: option.ListenOptions{
-						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						Listen:     option.NewListenAddress(netip.IPv4Unspecified()),
 						ListenPort: serverPort,
 						InboundOptions: option.InboundOptions{
-							DomainStrategy: option.DomainStrategy(C.DomainStrategyIPv6Only),
+							DomainStrategy: option.DomainStrategy(dns.DomainStrategyUseIPv6),
 						},
 					},
 					Users: []option.TUICUser{{
@@ -57,7 +56,7 @@ func TestTUICDomainUDP(t *testing.T) {
 			{
 				Type: C.TypeTUIC,
 				Tag:  "tuic-out",
-				Options: &option.TUICOutboundOptions{
+				TUICOptions: option.TUICOutboundOptions{
 					ServerOptions: option.ServerOptions{
 						Server:     "127.0.0.1",
 						ServerPort: serverPort,
@@ -76,18 +75,9 @@ func TestTUICDomainUDP(t *testing.T) {
 		Route: &option.RouteOptions{
 			Rules: []option.Rule{
 				{
-					Type: C.RuleTypeDefault,
 					DefaultOptions: option.DefaultRule{
-						RawDefaultRule: option.RawDefaultRule{
-							Inbound: []string{"mixed-in"},
-						},
-						RuleAction: option.RuleAction{
-							Action: C.RuleActionTypeRoute,
-
-							RouteOptions: option.RouteActionOptions{
-								Outbound: "tuic-out",
-							},
-						},
+						Inbound:  []string{"mixed-in"},
+						Outbound: "tuic-out",
 					},
 				},
 			},

@@ -8,7 +8,6 @@ type ShadowsocksInboundOptions struct {
 	Users        []ShadowsocksUser        `json:"users,omitempty"`
 	Destinations []ShadowsocksDestination `json:"destinations,omitempty"`
 	Multiplex    *InboundMultiplexOptions `json:"multiplex,omitempty"`
-	Managed      bool                     `json:"managed,omitempty"`
 }
 
 type ShadowsocksUser struct {

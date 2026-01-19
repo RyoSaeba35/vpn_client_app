@@ -10,8 +10,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.64.0 or later.
-const _ = grpc.SupportPackageIsVersion9
+// Requires gRPC-Go v1.32.0 or later.
+const _ = grpc.SupportPackageIsVersion7
 
 const (
 	StatsService_GetStats_FullMethodName    = "/experimental.v2rayapi.StatsService/GetStats"
@@ -37,9 +37,8 @@ func NewStatsServiceClient(cc grpc.ClientConnInterface) StatsServiceClient {
 }
 
 func (c *statsServiceClient) GetStats(ctx context.Context, in *GetStatsRequest, opts ...grpc.CallOption) (*GetStatsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetStatsResponse)
-	err := c.cc.Invoke(ctx, StatsService_GetStats_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, StatsService_GetStats_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -47,9 +46,8 @@ func (c *statsServiceClient) GetStats(ctx context.Context, in *GetStatsRequest, 
 }
 
 func (c *statsServiceClient) QueryStats(ctx context.Context, in *QueryStatsRequest, opts ...grpc.CallOption) (*QueryStatsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(QueryStatsResponse)
-	err := c.cc.Invoke(ctx, StatsService_QueryStats_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, StatsService_QueryStats_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +55,8 @@ func (c *statsServiceClient) QueryStats(ctx context.Context, in *QueryStatsReque
 }
 
 func (c *statsServiceClient) GetSysStats(ctx context.Context, in *SysStatsRequest, opts ...grpc.CallOption) (*SysStatsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SysStatsResponse)
-	err := c.cc.Invoke(ctx, StatsService_GetSysStats_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, StatsService_GetSysStats_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +65,7 @@ func (c *statsServiceClient) GetSysStats(ctx context.Context, in *SysStatsReques
 
 // StatsServiceServer is the server API for StatsService service.
 // All implementations must embed UnimplementedStatsServiceServer
-// for forward compatibility.
+// for forward compatibility
 type StatsServiceServer interface {
 	GetStats(context.Context, *GetStatsRequest) (*GetStatsResponse, error)
 	QueryStats(context.Context, *QueryStatsRequest) (*QueryStatsResponse, error)
@@ -76,11 +73,7 @@ type StatsServiceServer interface {
 	mustEmbedUnimplementedStatsServiceServer()
 }
 
-// UnimplementedStatsServiceServer must be embedded to have
-// forward compatible implementations.
-//
-// NOTE: this should be embedded by value instead of pointer to avoid a nil
-// pointer dereference when methods are called.
+// UnimplementedStatsServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedStatsServiceServer struct{}
 
 func (UnimplementedStatsServiceServer) GetStats(context.Context, *GetStatsRequest) (*GetStatsResponse, error) {
@@ -95,7 +88,6 @@ func (UnimplementedStatsServiceServer) GetSysStats(context.Context, *SysStatsReq
 	return nil, status.Errorf(codes.Unimplemented, "method GetSysStats not implemented")
 }
 func (UnimplementedStatsServiceServer) mustEmbedUnimplementedStatsServiceServer() {}
-func (UnimplementedStatsServiceServer) testEmbeddedByValue()                      {}
 
 // UnsafeStatsServiceServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to StatsServiceServer will
@@ -105,13 +97,6 @@ type UnsafeStatsServiceServer interface {
 }
 
 func RegisterStatsServiceServer(s grpc.ServiceRegistrar, srv StatsServiceServer) {
-	// If the following call pancis, it indicates UnimplementedStatsServiceServer was
-	// embedded by pointer and is nil.  This will cause panics if an
-	// unimplemented method is ever invoked, so we test this at initialization
-	// time to prevent it from happening at runtime later due to I/O.
-	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
-		t.testEmbeddedByValue()
-	}
 	s.RegisterService(&StatsService_ServiceDesc, srv)
 }
 
